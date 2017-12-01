@@ -12,10 +12,44 @@ LABEL com.redhat.component="cri-o" \
       atomic.type="system"
 
 RUN yum-config-manager --nogpgcheck --add-repo https://cbs.centos.org/repos/virt7-container-common-candidate/x86_64/os/ && \
-    yum install --disablerepo=extras --nogpgcheck --setopt=tsflags=nodocs -y iptables cri-o socat iproute runc && \
-    rpm -V iptables cri-o iproute runc && \
-    yum clean all && \
-    mkdir -p /exports/hostfs/etc/crio /exports/hostfs/opt/cni/bin/ /exports/hostfs/var/lib/containers/storage/ && \
+    yum install --disablerepo=extras --nogpgcheck --setopt=tsflags=nodocs -y \
+    btrfs-progs-devel \
+    device-mapper-devel \
+    git \
+    glib2-devel \
+    glibc-devel \
+    glibc-static \
+    go \
+    golang-github-cpuguy83-go-md2man \
+    gpgme-devel \
+    libassuan-devel \
+    libgpg-error-devel \
+    libseccomp-devel \
+    libselinux-devel \
+    ostree-devel \
+    pkgconfig \
+    runc \
+    skopeo-containers \
+    socat \
+    iproute \
+    make \
+    iptables && \
+    yum clean all
+
+# Install cri-o
+ENV CRIO_COMMIT list-sandboxes-refactor-1.8
+RUN set -x \
+       && export GOPATH="$(mktemp -d)" \
+       && git clone https://github.com/runcom/ocid-1.git "$GOPATH/src/github.com/kubernetes-incubator/cri-o" \
+       && cd "$GOPATH/src/github.com/kubernetes-incubator/cri-o" \
+       && git checkout -q "$CRIO_COMMIT" \
+       && make binaries docs \
+       && ./bin/crio --selinux=true --storage-driver=overlay --conmon /usr/libexec/crio/conmon --cni-plugin-dir /usr/libexec/cni --default-mounts /usr/share/rhel/secrets:/run/secrets --cgroup-manager=systemd config > crio.conf \
+       && make install.config install.systemd PREFIX=/usr \
+       && make install PREFIX=/usr \
+       && rm -rf "$GOPATH"
+
+RUN mkdir -p /exports/hostfs/etc/crio /exports/hostfs/opt/cni/bin/ /exports/hostfs/var/lib/containers/storage/ && \
     cp /etc/crio/* /exports/hostfs/etc/crio && \
     if test -e /usr/libexec/cni; then cp -Lr /usr/libexec/cni/* /exports/hostfs/opt/cni/bin/; fi
 
